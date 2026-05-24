@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>שם קוד - תנ"ך</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body { font-family: 'Rubik', sans-serif; background-color: #f3f4f6; -webkit-tap-highlight-color: transparent; }
+        .card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d; }
+        .card:active { transform: scale(0.95); }
+        .card-hidden { background-color: #ffffff; color: #1f2937; border: 2px solid #e5e7eb; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .card-red { background-color: #ef4444; color: white; border: 2px solid #dc2626; }
+        .card-blue { background-color: #3b82f6; color: white; border: 2px solid #2563eb; }
+        .card-neutral { background-color: #d1d5db; color: #374151; border: 2px solid #9ca3af; }
+        .card-assassin { background-color: #111827; color: white; border: 2px solid #000000; }
+        .spymaster-unrevealed { opacity: 0.8; }
+        @keyframes flipIn { 0% { transform: rotateX(-90deg); opacity: 0; } 100% { transform: rotateX(0); opacity: 1; } }
+        .revealed-anim { animation: flipIn 0.4s ease-out forwards; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .shake-screen { animation: shake 0.5s infinite; }
+        .emoji-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; font-size: 10rem; z-index: 50; pointer-events: none; opacity: 0; transition: opacity 0.5s; }
+        .show-emoji { opacity: 1; transform: scale(1.5); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-6 px-4">
+
+    <header class="w-full max-w-5xl flex flex-col md:flex-row justify-between items-center mb-6 gap-4 bg-white p-4 rounded-2xl shadow-sm">
+        <h1 class="text-3xl font-extrabold text-gray-800">שם קוד: <span class="text-indigo-600">תנ"ך</span></h1>
+        <div class="flex flex-wrap gap-2 justify-center">
+            <button onclick="toggleInstructions()" class="bg-blue-100 px-3 py-2 rounded-lg font-bold">📖 הוראות</button>
+            <button id="musicBtn" onclick="toggleMusic()" class="bg-purple-100 px-3 py-2 rounded-lg font-bold">🔇 מוזיקת מתח</button>
+            <input type="text" id="roomCodeInput" placeholder="קוד חדר" class="border rounded-lg p-2 w-24 text-center font-bold">
+            <button onclick="joinGame()" class="bg-indigo-500 text-white px-4 py-2 rounded-md font-bold">הצטרף</button>
+            <button onclick="createNewGame()" class="bg-emerald-500 text-white px-5 py-2 rounded-lg font-bold">משחק חדש</button>
+        </div>
+    </header>
+
+    <div class="w-full max-w-5xl bg-white p-3 rounded-xl shadow-sm mb-6 flex justify-between items-center">
+        <div class="flex gap-4 font-bold text-gray-700">
+            <span>כחול: <span id="blueCount">8</span></span>
+            <span>אדום: <span id="redCount">8</span></span>
+        </div>
+        <div class="flex items-center gap-2 bg-amber-50 px-4 py-1.5 rounded-full border">
+            <span id="timerDisplay" class="font-mono text-xl">01:00</span>
+            <button onclick="toggleTimer()" id="timerBtn">▶️</button>
+            <button onclick="resetTimer()">🔄</button>
+        </div>
+        <div class="flex gap-2">
+            <button id="btnClassroom" onclick="setViewMode('classroom')" class="bg-gray-800 text-white px-4 py-2 rounded-lg font-bold">כיתה</button>
+            <button id="btnSpymaster" onclick="setViewMode('spymaster')" class="bg-gray-200 px-4 py-2 rounded-lg font-bold">נציג</button>
+        </div>
+    </div>
+
+    <div id="gameBoard" class="w-full max-w-5xl grid grid-cols-5 gap-2 md:gap-4 flex-grow"></div>
+
+    <div id="instructionsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-2xl w-full">
+            <h2 class="text-2xl font-bold mb-4">איך משחקים?</h2>
+            <p>מצאו את המילים של הקבוצה שלכם בלי לפגוע במתנקש! נציג אחד מכל קבוצה מקבל את המפה המלאה.</p>
+            <button onclick="toggleInstructions()" class="mt-4 bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold">הבנתי!</button>
+        </div>
+    </div>
+
+    <div id="emojiOverlay" class="emoji-overlay"></div>
+
+    <script>
+        const wordBank = ["יריחו", "רחב", "ירדן", "חומות", "עכן", "העי", "גבעונים", "שמש", "אבנים", "גלגל", "עתניאל", "אהוד", "עגלון", "דבורה", "ברק", "סיסרא", "יעל", "יתד", "גדעון", "כדים", "יפתח", "שמשון", "דלילה", "אריה", "פלשתים", "עלי", "חנה", "פנינה", "שמואל", "ארון הברית", "דגון", "שאול", "אתונות", "קיש", "יונתן", "גלית", "קלע", "דוד", "מיכל", "כנור", "עין גדי", "בעלת האוב", "גלבוע"];
+        let cardColors = [], cardRevealed = Array(25).fill(false), viewMode = 'classroom', timeLeft = 60, isTimerRunning = false, isMusicPlaying = false;
+
+        // --- STREAMING_CHUNK:Implementing Logic ---
+        function hashString(str) { let hash = 0; for(let i=0; i<str.length; i++) hash = ((hash<<5)-hash)+str.charCodeAt(i); return Math.abs(hash); }
+        function seededRandom(seed) { return function() { seed = Math.imul(seed ^ seed >>> 15, seed | 1); return (seed >>> 0) / 4294967296; } }
+        
+        function generateGame(code) {
+            let rng = seededRandom(hashString(code));
+            let shuffled = [...wordBank].sort(() => rng() - 0.5);
+            let colors = [...Array(9).fill('red'), ...Array(8).fill('blue'), ...Array(7).fill('neutral'), 'assassin'].sort(() => rng() - 0.5);
+            cardColors = colors; cardRevealed = Array(25).fill(false);
+            renderBoard();
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('gameBoard'); board.innerHTML = '';
+            for (let i = 0; i < 25; i++) {
+                const btn = document.createElement('button');
+                btn.className = `card h-24 rounded-xl font-bold p-2 ${viewMode === 'classroom' && cardRevealed[i] ? 'card-' + cardColors[i] : 'card-hidden'}`;
+                btn.innerText = wordBank[i];
+                if (viewMode === 'classroom') btn.onclick = () => reveal(i);
+                else if (viewMode === 'spymaster') btn.classList.add('card-' + cardColors[i]);
+                board.appendChild(btn);
+            }
+        }
+
+        function reveal(i) {
+            cardRevealed[i] = true;
+            if (cardColors[i] === 'assassin') { document.body.classList.add('shake-screen'); playEmoji('💥'); }
+            else if (cardColors[i] === 'neutral') playEmoji('😢');
+            else playEmoji('🎉');
+            renderBoard();
+        }
+
+        function playEmoji(e) { 
+            const o = document.getElementById('emojiOverlay'); o.innerText = e; o.classList.add('show-emoji'); 
+            setTimeout(() => o.classList.remove('show-emoji'), 1000); 
+        }
+
+        function toggleInstructions() { document.getElementById('instructionsModal').classList.toggle('hidden'); }
+        function createNewGame() { generateGame(Math.floor(Math.random()*10000).toString()); }
+        function joinGame() { generateGame(document.getElementById('roomCodeInput').value); }
+        function setViewMode(m) { viewMode = m; renderBoard(); }
+        function toggleTimer() { /* logic here */ }
+        function resetTimer() { timeLeft = 60; document.getElementById('timerDisplay').innerText = "01:00"; }
+        window.onload = createNewGame;
+    </script>
+</body>
+</html>
